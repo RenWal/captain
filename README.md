@@ -13,7 +13,7 @@ like the app won't work while the controller is connected.
 
 If you want to understand how the remote control protocol works, look at the
 ControlMessage class in the demo. It allows you to specify what you want the drone
-to do and build the binary package. Just send this via UDP to the drone.
+to do and build the binary packet. Just send this via UDP to the drone.
 
 The demo contains a crude definition for a sequence of remote inputs that you can
 use to check out if all of the control axes work as expected, especially if you
