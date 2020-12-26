@@ -159,7 +159,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
    + [ControlMessage(pitchTrim=pt,rollTrim=rt)]*500
 
   for m in messages:
-    #sock.sendto(m.to_proto(), ("172.16.10.1", 8080))
+    sock.sendto(m.to_proto(), ("172.16.10.1", 8080))
     # you can increase this a little, but the drone will go into comms-lost mode
     # if you increase this too much
     time.sleep(.02)
