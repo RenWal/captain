@@ -1,9 +1,5 @@
 #!/usr/bin/python3
 
-from binascii import hexlify
-import socket
-import time
-
 class ControlMessage:
   def __init__(self, climb = 0, roll = 0, pitch = 0, yaw = 0, pitchTrim = 0, rollTrim = 0, yawTrim = 0, speed = 0, noHead = False, propLock = False, flip = False, takeoff = False, land = False, calibrate = False):
     # up-down vector, -1..1
@@ -58,7 +54,7 @@ class ControlMessage:
 
   @staticmethod
   def pack_smallvec(f):
-    return round((f/4+0.25)*255)
+    return round((f/2+0.5)*127)
 
   @staticmethod
   def unpack_smallvec(b):
@@ -115,51 +111,95 @@ class ControlMessage:
       self.speed, self.calibrate, self.flip, self.noHead, self.propLock, self.takeoff, self.land
     )
 
-#print(hexlify(ControlMessage(pitch=0.01,yaw=-0.004,roll=-0.004,takeoff=True,rollTrim=-16).to_proto()))
-#print(ControlMessage())
-#print(ControlMessage.from_proto(bytearray(int(x, 16) for x in "ff 08 7e 3f 40 3f 90 10 10 00 0b".split())))
+class Drone:
+  def __init__(self):
+    self.pitch_trim = 0
+    self.roll_trim = 0
+    self.yaw_trim = 0
 
-#print(ControlMessage.from_proto(bytearray(int(x, 16) for x in "ff 08 7e 3f 40 3f 90 10 00 40 print(hexlify(ControlMessage(sp))db".split())))
+    self.pitch = 0
+    self.roll = 0
+    self.yaw = 0
+    self.climb = 0
 
-with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-  # quick and dirty way to test if all axes are functional
-  pt=-2
-  rt=3
-  # sending action flags for 1 second replicates what the app does,
-  # however, sending it once is enough if you don't have packet loss
-  messages = \
-   [ControlMessage()]*200 \
-   + [ControlMessage(calibrate=True)]*50 \
-   + [ControlMessage()]*100 \
-   + [ControlMessage(takeoff=True)]*50 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt)]*200 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt,roll=-0.5)]*20 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt)]*25 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt,roll=0.3)]*20 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt)]*100 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt,roll=0.5)]*20 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt)]*25 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt,roll=-0.3)]*20 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt)]*100 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt,pitch=-0.5)]*20 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt)]*25 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt,pitch=0.3)]*20 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt)]*100 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt,pitch=0.5)]*20 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt)]*25 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt,pitch=-0.3)]*20 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt)]*100 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt,climb=0.7)]*15 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt)]*200 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt,climb=-1)]*15 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt)]*200 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt,yaw=1)]*100 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt)]*200 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt,land=True)]*50 \
-   + [ControlMessage(pitchTrim=pt,rollTrim=rt)]*500
+    self.speed = 0
 
-  for m in messages:
-    sock.sendto(m.to_proto(), ("172.16.10.1", 8080))
-    # you can increase this a little, but the drone will go into comms-lost mode
-    # if you increase this too much
-    time.sleep(.02)
+    self.action_timers = dict()
+    self.action_callbacks = set()
+
+  def register_callback(self, callback):
+    self.action_callbacks.add(callback)
+
+  def unregister_callback(self, callback):
+    self.action_callbacks.remove(callback)
+
+  def fire_callbacks(self, event, data):
+    for cb in self.action_callbacks:
+      cb(event, data)
+
+  def set_pitch_roll_vec(self, pitch, roll, invert_pitch=True):
+    self.pitch = min(1, max(-1, pitch)) * (-1 if invert_pitch else -1)
+    self.roll = min(1, max(-1, roll))
+
+  def set_yaw_climb_vec(self, yaw, climb):
+    self.yaw = min(1, max(-1, yaw))
+    self.climb = min(1, max(-1, climb))
+
+  def trim_left(self):
+    if self.roll_trim > -16:
+      self.roll_trim-=1
+
+  def trim_right(self):
+    if self.roll_trim < 15:
+      self.roll_trim+=1
+
+  def trim_forward(self):
+    if self.pitch_trim < 15:
+      self.pitch_trim+=1
+
+  def trim_aft(self):
+    if self.pitch_trim > -16:
+      self.pitch_trim-=1
+
+  def takeoff(self):
+    self.action_timers["takeoff"] = 50
+
+  def land(self):
+    self.action_timers["land"] = 50
+
+  def stop(self):
+    self.action_timers["propLock"] = 50
+
+  def flip(self):
+    self.action_timers["flip"] = 50
+
+  def next_speed(self):
+    self.speed = (self.speed+1) % 3
+
+  def attitude_hold(self):
+    self.pitch = 0
+    self.roll = 0
+    self.yaw = 0
+    self.climb = 0
+
+  def next_message(self):
+    action_args = dict()
+    for x in list(self.action_timers.keys()):
+      self.action_timers[x]-=1
+      if self.action_timers[x] == 0:
+        self.fire_callbacks("action_end", x)
+        del self.action_timers[x]
+      else:
+        action_args[x] = True
+
+    return ControlMessage(
+      pitch=self.pitch,
+      roll=self.roll,
+      yaw=self.yaw,
+      climb=self.climb,
+      pitchTrim = self.pitch_trim,
+      rollTrim = self.roll_trim,
+      yawTrim = self.yaw_trim,
+      speed = self.speed,
+      **action_args
+    )
