@@ -9,7 +9,7 @@ import time
 #print(ControlMessage())
 #print(ControlMessage.from_proto(bytearray(int(x, 16) for x in "ff 08 7e 3f 40 3f 90 10 10 00 0b".split())))
 
-#print(ControlMessage.from_proto(bytearray(int(x, 16) for x in "ff 08 7e 3f 40 3f 90 10 00 40 print(hexlify(ControlMessage(sp))db".split())))
+#print(ControlMessage.from_proto(bytearray(int(x, 16) for x in "ff 08 7e 3f 40 3f 90 10 00 40 db".split())))
 
 with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
   # quick and dirty way to test if all axes are functional
