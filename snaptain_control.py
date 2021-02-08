@@ -58,7 +58,7 @@ class ControlMessage:
 
   @staticmethod
   def unpack_smallvec(b):
-    return (b/255-0.25)*4
+    return (b/127-0.5)*2
 
   @staticmethod
   def pack_trim(t):
@@ -88,7 +88,7 @@ class ControlMessage:
   def from_proto(clazz, field, ignoreChecksum = False):
     assert ignoreChecksum or field[10] == 255 - (sum(field[1:10]) % 256), "checksum fail"
     m = ControlMessage()
-    m.climb = -m.unpack_bigvec(field[2])
+    m.climb = m.unpack_bigvec(field[2])
     m.yaw = m.unpack_smallvec(field[3])
     m.pitch = m.unpack_smallvec(field[4])
     m.roll = m.unpack_smallvec(field[5])
@@ -138,7 +138,7 @@ class Drone:
       cb(event, data)
 
   def set_pitch_roll_vec(self, pitch, roll, invert_pitch=True):
-    self.pitch = min(1, max(-1, pitch)) * (-1 if invert_pitch else -1)
+    self.pitch = min(1, max(-1, pitch)) * (-1 if invert_pitch else 1)
     self.roll = min(1, max(-1, roll))
 
   def set_yaw_climb_vec(self, yaw, climb):
