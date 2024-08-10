@@ -172,6 +172,9 @@ class Drone:
 
   def flip(self):
     self.action_timers["flip"] = 50
+  
+  def calibrate(self):
+    self.action_timers["calibrate"] = 50
 
   def next_speed(self):
     self.speed = (self.speed+1) % 3
